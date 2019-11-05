@@ -5,7 +5,7 @@ Created on 2016年4月18日
 @author: lenovo
 '''
 
-from spam.spamEmail import spamEmailBayes
+from spamEmail import spamEmailBayes
 import re
 import csv
 import pickle
@@ -34,26 +34,13 @@ devs = []
 outs = []
 
 
-def load_normal(normal):
+def load_email(normal):
     wordsDict = {}
     wordsList = []
-    for line in normal.split('\n'):
-        #过滤掉非中文字符
-        rule=re.compile(r"[^\u4e00-\u9fa5]")
-        line=rule.sub("",line)
-        #将每封邮件出现的词保存在wordsList中
-        spam.get_word_list(line,wordsList,stopList)
-    #统计每个词在所有邮件中出现的次数
-    spam.addToDict(wordsList, wordsDict)
-    return wordsDict
-
-def load_spam(spami):
-    wordsDict = {}
-    wordsList = []
-    for line in spami.split('\n'):
-        rule=re.compile(r"[^\u4e00-\u9fa5]")
-        line=rule.sub("",line)
-        spam.get_word_list(line,wordsList,stopList)
+    line = normal
+    rule=re.compile(r"[^\u4e00-\u9fa5]")
+    line=rule.sub("",line)
+    spam.get_word_list(line,wordsList,stopList)
     spam.addToDict(wordsList, wordsDict)
     return wordsDict
 
@@ -99,15 +86,17 @@ def calAccuracy(devs, outs):
 
 def joinmaps(lst):
     ret = {}
+    cnt = 0
     for d in lst:
         for k, v in d.items():
             ret[k] = ret.get(k, 0) + v
-    return ret
+            cnt += v
+    return ret, cnt
 
 def main():
     #spam类对象
 
-    with open("../../Chinese_spam_mails/train.csv", 'r', encoding='utf-8') as f:
+    with open("../data/train.csv", 'r', encoding='utf-8') as f:
         all_in_one = list(csv.reader(f))
         for line in all_in_one:
             if line[1] == '1':
@@ -119,13 +108,13 @@ def main():
         spamFilelen = len(spams)
         print("loaded %d normal emails and %d spams" % (len(normals), len(spams)))
 
-    with open("../../Chinese_spam_mails/dev.csv", 'r', encoding='utf-8') as f:
+    with open("../data/dev.csv", 'r', encoding='utf-8') as f:
         devs = list(csv.reader(f))
 
     tests = []
 
-    with open("../../Chinese_spam_mails/test.csv", 'r', encoding='utf-8') as f:
-        tests = list(next(csv.reader(f)))
+    with open("../data/test.csv", 'r', encoding='utf-8') as f:
+        tests = list(csv.reader(f))[1:]
 
     pool = Pool()
 
@@ -133,21 +122,21 @@ def main():
 
     wordsDict.clear()
 
-    nds = pool.map(load_normal, normals)
-    normDict=joinmaps(nds)
+    nds = pool.map(load_email, normals)
+    normDict, normFileCount=joinmaps(nds)
     print("normal email loaded")
 
     #获得垃圾邮件中的词频
     wordsDict.clear()
 
-    sds = pool.map(load_spam, spams)
-    spamDict=joinmaps(sds)
+    sds = pool.map(load_email, spams)
+    spamDict, spamFileCount=joinmaps(sds)
     print("spam email loaded")
 
     print(sorted(normDict.items(), key=lambda x : (-x[1]))[:20])
     print(sorted(spamDict.items(), key=lambda x : (-x[1]))[:20])
 
-    outs = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFilelen, spamFilelen=spamFilelen), devs)
+    outs = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFileCount, spamFilelen=spamFileCount), devs)
     print("test completed") 
 
     testAccuracy=calAccuracy(devs, outs)
@@ -155,7 +144,7 @@ def main():
     #     print(i+"/"+str(ic))
     print(testAccuracy)
     
-    rets = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFilelen, spamFilelen=spamFilelen), tests)
+    rets = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFileCount, spamFilelen=spamFileCount), tests)
     print("work completed")
     with open('answer.txt', 'w') as f:
         print("\n".join(map(str, rets)), file=f)
