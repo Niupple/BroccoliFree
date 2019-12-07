@@ -29,7 +29,8 @@ def text2words(data : (str, str)):
 def words2vec(words : list):
     ret = [0 for i in range(len(dictionary))]
     for word in words:
-        ret[dictionary[word]] += 1
+        if word in dictionary:
+            ret[dictionary[word]] += 1
     return ret
 
 def main():
@@ -54,19 +55,22 @@ def main():
 
     data_train_lp = data_train.map(lambda x : LabeledPoint(x[1], words2vec(x[0])))
     # data_dev_lp = data_dev.map(lambda x : LabeledPoint(x[1], words2vec(x[0])))
-    label_dev_gt = data_dev.map(lambda x : x[1]).collect()
+    label_dev_gt = data_dev.map(lambda x : int(x[1])).collect()
 
     data_dev_p = data_dev.map(lambda x : array(words2vec(x[0])))
 
     # print(sum(data_train_lp.first()[0]))
     print("___________train______________")
+    sys.stdout.flush()
     nb = NaiveBayes.train(data_train_lp)
     print("___________train______________")
-    result_dev = nb.predict(data_dev_p).collect()
+    result_dev = nb.predict(data_dev_p).map(int).collect()
 
     n = len(result_dev)
     cnt = 0
     assert len(result_dev) == len(label_dev_gt)
+    print(result_dev)
+    print(label_dev_gt)
     for x, y in zip(result_dev, label_dev_gt):
         if x == y:
             cnt += 1
