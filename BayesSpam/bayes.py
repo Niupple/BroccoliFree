@@ -12,6 +12,8 @@ import pickle
 from multiprocessing import Pool
 from collections import Counter
 from functools import partial
+from math import fabs
+
 spam=spamEmailBayes()
 #保存词频的词典
 spamDict={}
@@ -48,40 +50,44 @@ def calc_test(test, spamDict, normDict, normFilelen, spamFilelen):
     testDict = {}
     wordsDict = {}
     wordsList = []
-    for line in test[0].split('\n'):
-        rule=re.compile(r"[^\u4e00-\u9fa5]")
-        line=rule.sub("",line)
-        spam.get_word_list(line,wordsList,stopList)
+    line = test[0]
+    rule=re.compile(r"[^\u4e00-\u9fa5]")
+    line=rule.sub("",line)
+    spam.get_word_list(line,wordsList,stopList)
+    # if "招聘" in wordsList:
+    #     return 0, -10000.
     spam.addToDict(wordsList, wordsDict)
     testDict=wordsDict.copy()
     #通过计算每个文件中p(s|w)来得到对分类影响最大的15个词
     wordProbList=spam.getTestWords(testDict, spamDict,normDict,normFilelen,spamFilelen)
     #对每封邮件得到的15个词计算贝叶斯概率  
     p=spam.calBayesLog(wordProbList, spamDict, normDict, normFilelen,spamFilelen)
-    # if p > 0.1:
-        # print(p)
     if(p>0):
-        # outs.append(1)
-        return 1
+        return 1, p
     else:
-        # outs.append(0)
-        return 0
+        return 0, p
 
 def calAccuracy(devs, outs):
     n = len(outs)
     equ = 0
     fake_true = 0
     fake_false = 0
+    ftrue = open("logs/fake_true.txt", "w")
+    ffalse = open("logs/fake_false.txt", "w")
+    fclose = open("logs/close.txt", "w")
     # assert len(devs) == len(outs)
     for i in range(n):
-        if int(devs[i][1]) == outs[i]:
+        if int(devs[i][1]) == outs[i][0]:
             equ += 1
         elif devs[i][1] == '0':
             fake_true += 1
-            print(devs[i][0], devs[i][1], outs[i])
+            print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=ftrue)
         else:
             fake_false += 1
-    print("fake true = %f, fake false = %f" % (fake_true/n, fake_false/n))
+            print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=ffalse)
+        if fabs(outs[i][1]) < 0.2:
+            print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=fclose)
+    print("fake true = %f(%d), fake false = %f(%d)" % (fake_true/n, fake_true, fake_false/n, fake_false))
     return equ/n
 
 def joinmaps(lst):
@@ -96,8 +102,9 @@ def joinmaps(lst):
 def main():
     #spam类对象
 
-    with open("../data/train.csv", 'r', encoding='utf-8') as f:
-        all_in_one = list(csv.reader(f))
+    with open("../data/train.csv", 'r', encoding='utf-8') as f1:
+        # with open("../data/dev.csv", 'r', encoding='utf-8') as f2:
+        all_in_one = list(csv.reader(f1))
         for line in all_in_one:
             if line[1] == '1':
                 spams.append(line[0])
@@ -144,10 +151,10 @@ def main():
     #     print(i+"/"+str(ic))
     print(testAccuracy)
     
-    rets = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFileCount, spamFilelen=spamFileCount), tests)
+    rets = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFilelen, spamFilelen=spamFilelen), tests)
     print("work completed")
     with open('answer.txt', 'w') as f:
-        print("\n".join(map(str, rets)), file=f)
+        print("\n".join(map(str, map(lambda x : x[0], rets))), file=f)
 
 if __name__=='__main__':
     main()

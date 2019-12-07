@@ -6,7 +6,7 @@ Created on 2016年4月18日
 '''
 import jieba
 import os
-from math import log
+from math import log, fabs
 
 jieba.initialize()
 
@@ -35,13 +35,15 @@ class spamEmailBayes:
         # print(spamDict, normDict)
         # print(normFilelen, spamFilelen)
         wordProbList={}
-        default = 1/(normFilelen + spamFilelen)
+        default = 1/(1e30)
+        # default = 0.00001
         for word,num  in testDict.items():
             #该文件中包含词个数
             pw_s=spamDict.get(word, default)/spamFilelen
             pw_n=normDict.get(word, default)/normFilelen
             ps_w=pw_s/pw_n
-            ps_w = log(ps_w)*num
+            # ps_w = log(ps_w)*num
+            ps_w = log(ps_w)
             wordProbList.setdefault(word,ps_w)
         # wordProbList = sorted(wordProbList.items(),key=lambda d:d[1],reverse=True)[0:15]
         return (wordProbList)
@@ -53,14 +55,3 @@ class spamEmailBayes:
             ret += prob_log
         # print(str(ps_w)+"////"+str(ps_n))
         return ret
-
-    #计算预测结果正确率
-    def calAccuracy(self,testResult):
-        rightCount=0
-        errorCount=0
-        for name ,catagory in testResult.items():
-            if (int(name)<1000 and catagory==0) or(int(name)>1000 and catagory==1):
-                rightCount+=1
-            else:
-                errorCount+=1
-        return rightCount/(rightCount+errorCount)
