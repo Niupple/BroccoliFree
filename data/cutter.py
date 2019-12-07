@@ -9,7 +9,7 @@ def main():
         rinput = open('raw_train.csv', 'r')
         train_out = open('train.csv', 'w')
         dev_out = open('dev.csv', 'w')
-        lines = list(csv.reader(rinput))
+        lines = list(csv.reader(rinput))[1:]
         random.shuffle(lines)
         n = len(lines)
         k = int(n*TRAIN_PERCENT)
