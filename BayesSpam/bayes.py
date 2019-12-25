@@ -1,71 +1,22 @@
-#encoding=utf-8
+# encoding=utf-8
 '''
 Created on 2016年4月18日
 
 @author: lenovo
 '''
 
-from spamEmail import spamEmailBayes
 import re
 import csv
 import pickle
 from multiprocessing import Pool
 from collections import Counter
 from functools import partial
-from math import fabs
+from math import fabs, log
+import jieba
 
-spam=spamEmailBayes()
-#保存词频的词典
-spamDict={}
-normDict={}
-#保存每封邮件中出现的词
-wordsDict={}
-#保存预测结果,key为文件名，值为预测类别
-#分别获得正常邮件、垃圾邮件及测试文件名称列表
-#获取训练集中正常邮件与垃圾邮件的数量
-normFilelen=0
-spamFilelen=0
-#获得停用词表，用于对停用词过滤
-stopList=spam.getStopWords()
-#获得正常邮件中的词频
-
-all_in_one = []
-normals = []
-spams = []
-devs = []
-outs = []
+jieba.initialize()
 
 
-def load_email(normal):
-    wordsDict = {}
-    wordsList = []
-    line = normal
-    rule=re.compile(r"[^\u4e00-\u9fa5]")
-    line=rule.sub("",line)
-    spam.get_word_list(line,wordsList,stopList)
-    spam.addToDict(wordsList, wordsDict)
-    return wordsDict
-
-def calc_test(test, spamDict, normDict, normFilelen, spamFilelen):
-    testDict = {}
-    wordsDict = {}
-    wordsList = []
-    line = test[0]
-    rule=re.compile(r"[^\u4e00-\u9fa5]")
-    line=rule.sub("",line)
-    spam.get_word_list(line,wordsList,stopList)
-    # if "招聘" in wordsList:
-    #     return 0, -10000.
-    spam.addToDict(wordsList, wordsDict)
-    testDict=wordsDict.copy()
-    #通过计算每个文件中p(s|w)来得到对分类影响最大的15个词
-    wordProbList=spam.getTestWords(testDict, spamDict,normDict,normFilelen,spamFilelen)
-    #对每封邮件得到的15个词计算贝叶斯概率  
-    p=spam.calBayesLog(wordProbList, spamDict, normDict, normFilelen,spamFilelen)
-    if(p>0):
-        return 1, p
-    else:
-        return 0, p
 
 def calAccuracy(devs, outs):
     n = len(outs)
@@ -87,8 +38,10 @@ def calAccuracy(devs, outs):
             print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=ffalse)
         if fabs(outs[i][1]) < 0.2:
             print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=fclose)
-    print("fake true = %f(%d), fake false = %f(%d)" % (fake_true/n, fake_true, fake_false/n, fake_false))
+    print("fake true = %f(%d), fake false = %f(%d)" %
+          (fake_true/n, fake_true, fake_false/n, fake_false))
     return equ/n
+
 
 def joinmaps(lst):
     ret = {}
@@ -99,62 +52,120 @@ def joinmaps(lst):
             cnt += v
     return ret, cnt
 
-def main():
-    #spam类对象
+class BayesSpam:
+    def __init__(self):
+        self.norm_file_len = 0
+        self.spam_file_len = 0
+        self.norm_dict = {}
+        self.spam_dict = {}
+        self.words_dict = {}
+        self.stop_list = []
+        self.words_list = []
 
-    with open("../data/train.csv", 'r', encoding='utf-8') as f1:
-        # with open("../data/dev.csv", 'r', encoding='utf-8') as f2:
-        all_in_one = list(csv.reader(f1))
-        for line in all_in_one:
+        with open("stoplist.txt", encoding='utf-8') as sl:
+            for line in sl:
+                self.stop_list.append(line)
+
+    def train(self, data):
+        spams = []
+        normals = []
+        for line in data:
             if line[1] == '1':
                 spams.append(line[0])
             else:
                 normals.append(line[0])
-        global normFilelen, spamFilelen
-        normFilelen = len(normals)
-        spamFilelen = len(spams)
-        print("loaded %d normal emails and %d spams" % (len(normals), len(spams)))
+        self.norm_file_len = len(normals)
+        self.spam_file_len = len(spams)
+        print("normal email number: ", self.norm_file_len)
+        print("spam email number: ", self.spam_file_len)
+        self.norm_dict = self._update_words_to_dict(normals)
+        self.spam_dict = self._update_words_to_dict(spams)
+
+    def predict(self, data):
+        pool = Pool()
+        return pool.map(self._test_line, data)
+
+    def _update_words_to_dict(self, emails):
+        pool = Pool()
+        dicts = pool.map(self._load_email, emails)
+        return joinmaps(dicts)[0]
+
+    def _test_line(self, email):
+        text = email[0]
+        rule = re.compile(r"[^\u4e00-\u9fa5]")
+        text = rule.sub("", text)
+        wl = self._load_email(text)
+        p = self._dict_to_prob(wl)
+        if(p > 0):
+            return 1, p
+        else:
+            return 0, p
+
+    def _dict_to_prob(self, testDict):
+        ret = log(self.spam_file_len/self.norm_file_len)
+        # print(spamDict, normDict)
+        # print(normFilelen, spamFilelen)
+        default = 1/(1e30)
+        # default = 0.00001
+        for word in testDict:
+            pw_s = self.spam_dict.get(word, default)/self.spam_file_len
+            pw_n = self.norm_dict.get(word, default)/self.norm_file_len
+            ps_w = pw_s/pw_n
+            # ps_w = log(ps_w)*num
+            ps_w = log(ps_w)
+            ret += ps_w
+        # wordProbList = sorted(wordProbList.items(),key=lambda d:d[1],reverse=True)[0:15]
+        return ret
+
+    def _load_email(self, normal):
+        word_list = []
+        word_dict = {}
+        line = normal
+        rule = re.compile(r"[^\u4e00-\u9fa5]")
+        line = rule.sub("", line)
+        res_list = list(jieba.cut(line))
+        for i in res_list:
+            if i not in self.stop_list and i.strip() != '' and i != None:
+                word_dict[i] = word_dict.get(i, 0) + 1
+
+        return word_dict
+
+    def _add_to_dict(self, wordsList, wordsDict):
+        for item in wordsList:
+            wordsDict[item] = wordsDict.get(item, 0) + 1
+
+def dump(rets):
+    with open('answer.txt', 'w') as f:
+        print("\n".join(map(str, map(lambda x: x[0], rets))), file=f)
+
+def main():
+    with open("../data/train.csv", 'r', encoding='utf-8') as f:
+        train_raw = list(csv.reader(f))
 
     with open("../data/dev.csv", 'r', encoding='utf-8') as f:
-        devs = list(csv.reader(f))
-
-    tests = []
+        dev_raw = list(csv.reader(f))
 
     with open("../data/test.csv", 'r', encoding='utf-8') as f:
-        tests = list(csv.reader(f))[1:]
+        test_raw = list(csv.reader(f))[1:]
 
-    pool = Pool()
+    bs = BayesSpam()
 
-    global normDict, spamDict, wordsDict
+    print("_______bayes________")
+    bs.train(train_raw)
 
-    wordsDict.clear()
+    result_train = bs.predict(train_raw)
+    result_dev = bs.predict(dev_raw)
+    result_test = bs.predict(test_raw)
+    print("test completed")
 
-    nds = pool.map(load_email, normals)
-    normDict, normFileCount=joinmaps(nds)
-    print("normal email loaded")
+    devAccuracy = calAccuracy(dev_raw, result_dev)
+    trainAccuracy = calAccuracy(train_raw, result_train)
+    print("train acc =", trainAccuracy)
+    print("dev acc =", devAccuracy)
+    print("_______bayes________")
 
-    #获得垃圾邮件中的词频
-    wordsDict.clear()
-
-    sds = pool.map(load_email, spams)
-    spamDict, spamFileCount=joinmaps(sds)
-    print("spam email loaded")
-
-    print(sorted(normDict.items(), key=lambda x : (-x[1]))[:20])
-    print(sorted(spamDict.items(), key=lambda x : (-x[1]))[:20])
-
-    outs = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFileCount, spamFilelen=spamFileCount), devs)
-    print("test completed") 
-
-    testAccuracy=calAccuracy(devs, outs)
-    # for i,ic in testResult.items():
-    #     print(i+"/"+str(ic))
-    print(testAccuracy)
-    
-    rets = pool.map(partial(calc_test, spamDict=spamDict, normDict=normDict, normFilelen=normFilelen, spamFilelen=spamFilelen), tests)
     print("work completed")
-    with open('answer.txt', 'w') as f:
-        print("\n".join(map(str, map(lambda x : x[0], rets))), file=f)
+    dump(result_test)
 
-if __name__=='__main__':
+if __name__ == '__main__':
     main()
