@@ -1,47 +1,10 @@
-# encoding=utf-8
-'''
-Created on 2016年4月18日
-
-@author: lenovo
-'''
-
 import re
-import csv
-import pickle
+from math import log
 from multiprocessing import Pool
-from collections import Counter
-from functools import partial
-from math import fabs, log
+
 import jieba
 
 jieba.initialize()
-
-
-
-def calAccuracy(devs, outs):
-    n = len(outs)
-    equ = 0
-    fake_true = 0
-    fake_false = 0
-    ftrue = open("logs/fake_true.txt", "w")
-    ffalse = open("logs/fake_false.txt", "w")
-    fclose = open("logs/close.txt", "w")
-    # assert len(devs) == len(outs)
-    for i in range(n):
-        if int(devs[i][1]) == outs[i][0]:
-            equ += 1
-        elif devs[i][1] == '0':
-            fake_true += 1
-            print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=ftrue)
-        else:
-            fake_false += 1
-            print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=ffalse)
-        if fabs(outs[i][1]) < 0.2:
-            print(devs[i][0], devs[i][1], outs[i][0], outs[i][1], file=fclose)
-    print("fake true = %f(%d), fake false = %f(%d)" %
-          (fake_true/n, fake_true, fake_false/n, fake_false))
-    return equ/n
-
 
 def joinmaps(lst):
     ret = {}
@@ -97,9 +60,9 @@ class BayesSpam:
         wl = self._load_email(text)
         p = self._dict_to_prob(wl)
         if(p > 0):
-            return 1, p
+            return 1
         else:
-            return 0, p
+            return 0
 
     def _dict_to_prob(self, testDict):
         ret = log(self.spam_file_len/self.norm_file_len)
@@ -118,7 +81,6 @@ class BayesSpam:
         return ret
 
     def _load_email(self, normal):
-        word_list = []
         word_dict = {}
         line = normal
         rule = re.compile(r"[^\u4e00-\u9fa5]")
@@ -133,39 +95,3 @@ class BayesSpam:
     def _add_to_dict(self, wordsList, wordsDict):
         for item in wordsList:
             wordsDict[item] = wordsDict.get(item, 0) + 1
-
-def dump(rets):
-    with open('answer.txt', 'w') as f:
-        print("\n".join(map(str, map(lambda x: x[0], rets))), file=f)
-
-def main():
-    with open("../data/train.csv", 'r', encoding='utf-8') as f:
-        train_raw = list(csv.reader(f))
-
-    with open("../data/dev.csv", 'r', encoding='utf-8') as f:
-        dev_raw = list(csv.reader(f))
-
-    with open("../data/test.csv", 'r', encoding='utf-8') as f:
-        test_raw = list(csv.reader(f))[1:]
-
-    bs = BayesSpam()
-
-    print("_______bayes________")
-    bs.train(train_raw)
-
-    result_train = bs.predict(train_raw)
-    result_dev = bs.predict(dev_raw)
-    result_test = bs.predict(test_raw)
-    print("test completed")
-
-    devAccuracy = calAccuracy(dev_raw, result_dev)
-    trainAccuracy = calAccuracy(train_raw, result_train)
-    print("train acc =", trainAccuracy)
-    print("dev acc =", devAccuracy)
-    print("_______bayes________")
-
-    print("work completed")
-    dump(result_test)
-
-if __name__ == '__main__':
-    main()
