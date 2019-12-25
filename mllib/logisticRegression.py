@@ -7,17 +7,17 @@ import sys
 def main():
     sc = SparkContext('local[15]', 'haha')
     d = load(sc)
-    data_train_lp, data_dev_p, label_dev_gt, test_p = d['train_lp'], d['dev_p'], d['dev_gt'], d['test_p']
-    data_train_p, label_train_gt = d['train_p'], d['train_gt']
-    print("count =", data_train_lp.take(10))
+    data_train_lp, data_dev_p, label_dev_gt, test_p = d['train_tfidf_lp'], d['dev_tfidf'], d['dev_gt'], d['test_tfidf']
+    data_train_p, label_train_gt = d['train_tfidf'], d['train_gt']
+    # print("count =", data_train_lp.take(10))
     sample_train = data_train_lp
     print("sample in total: ", sample_train.count())
     print("___________train______________")
     sys.stdout.flush()
-    lg = LogisticRegressionWithSGD.train(sample_train, step=0.000001)
+    lg = LogisticRegressionWithSGD.train(sample_train, step=0.005)
     print("___________trained____________")
     sys.stdout.flush()
-    lg.save(sc, 'logistic.model')
+    # lg.save(sc, 'logistic.model')
     result_dev = lg.predict(data_dev_p).map(int)
     result_train = lg.predict(data_train_p).map(int)
 

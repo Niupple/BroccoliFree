@@ -131,16 +131,19 @@ def load(sc):
     # print(data_train_tfidf_lp.zip(data_train).collect())
 
     ret = {}
+    ret['train_raw'] = data_train
     ret['train_lp'] = data_train_lp
     ret['train_p'] = data_train_p
     ret['train_gt'] = label_train_gt
     ret['train_tfidf'] = data_train_tfidf
     ret['train_tfidf_lp'] = data_train_tfidf_lp
+    ret['dev_raw'] = data_dev
     ret['dev_tfidf'] = data_dev_tfidf
     ret['dev_tfidf_lp'] = data_dev_tfidf_lp
     ret['dev_lp'] = data_dev_lp
     ret['dev_p'] = data_dev_p
     ret['dev_gt'] = label_dev_gt
+    ret['test_raw'] = data_test
     ret['test_tfidf'] = data_test_tfidf
     ret['test_p'] = data_test_p
 
