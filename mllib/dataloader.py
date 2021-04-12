@@ -68,18 +68,18 @@ def load(sc):
     data_dev = read_from_file('../data/dev.csv')
     data_test = read_from_file('../data/test.csv')
 
-    data_train = sc.parallelize(data_train).sample(False, 0.01)
-    data_dev = sc.parallelize(data_dev)
-    data_test = sc.parallelize(data_test)
+    data_train_raw = sc.parallelize(data_train)
+    data_dev_raw = sc.parallelize(data_dev)
+    data_test_raw = sc.parallelize(data_test)
 
-    print('train_cnt = ', data_train.count())
+    print('train_cnt = ', data_train_raw.count())
     # print(data_train.map(lambda x : [x[0][:min(len(x[0]), 100)], x[1]]).zipWithIndex().collect())
 
-    data_train_count = data_train.count()
+    data_train_count = data_train_raw.count()
 
-    data_train = data_train.map(textwithlabel2words)
-    data_dev = data_dev.map(textwithlabel2words)
-    data_test = data_test.map(text2words)
+    data_train = data_train_raw.map(textwithlabel2words)
+    data_dev = data_dev_raw.map(textwithlabel2words)
+    data_test = data_test_raw.map(text2words)
 
     # print(data_train.take(10))
 
@@ -131,19 +131,19 @@ def load(sc):
     # print(data_train_tfidf_lp.zip(data_train).collect())
 
     ret = {}
-    ret['train_raw'] = data_train
+    ret['train_raw'] = data_train_raw
     ret['train_lp'] = data_train_lp
     ret['train_p'] = data_train_p
     ret['train_gt'] = label_train_gt
     ret['train_tfidf'] = data_train_tfidf
     ret['train_tfidf_lp'] = data_train_tfidf_lp
-    ret['dev_raw'] = data_dev
+    ret['dev_raw'] = data_dev_raw
     ret['dev_tfidf'] = data_dev_tfidf
     ret['dev_tfidf_lp'] = data_dev_tfidf_lp
     ret['dev_lp'] = data_dev_lp
     ret['dev_p'] = data_dev_p
     ret['dev_gt'] = label_dev_gt
-    ret['test_raw'] = data_test
+    ret['test_raw'] = data_test_raw
     ret['test_tfidf'] = data_test_tfidf
     ret['test_p'] = data_test_p
 

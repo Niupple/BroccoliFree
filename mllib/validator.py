@@ -10,5 +10,6 @@ def valid(result_dev, label_dev_gt):
     sys.stdout.flush()
 
 def dump(test_label):
+    print("in dump")
     with open('answer.txt', 'w') as f:
         print('\n'.join(map(str, test_label)), file=f)
